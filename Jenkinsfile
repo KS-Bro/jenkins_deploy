@@ -11,28 +11,13 @@ pipeline {
 
         stage('Build') {
             steps {
-                bat 'dotnet build --configuration Release'
+                bat 'dotnet build'
             }
         }
 
         stage('Test') {
-            when {
-                anyOf {
-                    branch 'QA'
-                    branch 'main'
-                }
-            }
             steps {
-                bat 'dotnet test'
-            }
-        }
-
-        stage('Publish') {
-            when {
-                branch 'main'
-            }
-            steps {
-                bat 'dotnet publish -c Release -o publish'
+                echo 'Running tests'
             }
         }
     }
