@@ -8,7 +8,7 @@ namespace Jenkins_Deploy.Controllers
     {
         private static readonly string[] Summaries = new[]
         {
-            "Bracing", "Freezing","Chilly", "Warm", "Balmy",  "Sweltering", "Hot", "Scorching",  "Cool", "Mild"
+            "Bracing", "Freezing","Chilly", "Warm",  "Sweltering", "Hot", "Scorching",  "Cool", "Mild", "Balmy"
         };
 
         private readonly ILogger<WeatherForecastController> _logger;
