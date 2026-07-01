@@ -1,0 +1,48 @@
+name: Jenkins Trigger
+
+on:
+  push:
+    branches: [ Dev, QA, main ]
+
+jobs:
+  jenkins-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger and wait for Jenkins build
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF##*/}"
+          JOB_PATH="job/jenkins-deploy/job/${BRANCH_NAME}"
+
+          echo "Waiting for Jenkins to pick up build for branch: $BRANCH_NAME"
+          sleep 20
+
+          LAST_BUILD=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+            "$JENKINS_URL/$JOB_PATH/lastBuild/api/json")
+
+          BUILD_NUMBER=$(echo "$LAST_BUILD" | grep -o '"number":[0-9]*' | head -1 | grep -o '[0-9]*')
+          echo "Tracking Jenkins build #$BUILD_NUMBER"
+
+          while true; do
+            STATUS=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/api/json")
+            BUILDING=$(echo "$STATUS" | grep -o '"building":[a-z]*' | grep -o '[a-z]*$')
+            if [ "$BUILDING" = "false" ]; then
+              break
+            fi
+            echo "Still building..."
+            sleep 10
+          done
+
+          RESULT=$(echo "$STATUS" | grep -o '"result":"[A-Z]*"' | grep -o '"[A-Z]*"$' | tr -d '"')
+          echo "Jenkins build result: $RESULT"
+
+          if [ "$RESULT" != "SUCCESS" ]; then
+            echo "Jenkins build failed or unstable."
+            exit 1
+          fi
+
+          echo "Jenkins build succeeded."
