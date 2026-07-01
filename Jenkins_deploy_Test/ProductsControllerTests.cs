@@ -38,7 +38,7 @@ namespace Jenkins_deploy_Test
 
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var product = Assert.IsType<Product>(okResult.Value);
-            Assert.Equal(1, product.Id);
+            Assert.Equal(10, product.Id);
         }
 
         [Fact]
