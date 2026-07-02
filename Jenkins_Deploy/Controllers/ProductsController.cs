@@ -19,7 +19,8 @@ namespace Jenkins_Deploy.Controllers
         private static readonly List<Product> _products = new()
         {
             new Product { Id = 1, Name = "Keyboard", Price = 25.50m },
-            new Product { Id = 2, Name = "Mouse", Price = 15.00m }
+            new Product { Id = 2, Name = "Mouse", Price = 15.00m },
+            new Product { Id = 3, Name = "Monitor", Price = 75.00m }
         };
 
         public ProductsController(ILogger<ProductsController> logger)
