@@ -19,12 +19,11 @@ jobs:
 
     steps:
       - name: Determine branch
-        id: branch
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            BRANCH_NAME="${GITHUB_BASE_REF}"
+            BRANCH_NAME="$GITHUB_HEAD_REF"
           else
-            BRANCH_NAME="${GITHUB_REF_NAME}"
+            BRANCH_NAME="$GITHUB_REF_NAME"
           fi
 
           echo "Branch Name: $BRANCH_NAME"
@@ -39,26 +38,36 @@ jobs:
 
           JOB_PATH="job/jenkins-deploy/job/${BRANCH_NAME}"
 
-          echo "Waiting for Jenkins build on branch: ${BRANCH_NAME}"
+          echo "=================================="
+          echo "Branch      : $BRANCH_NAME"
+          echo "Job Path    : $JOB_PATH"
+          echo "Jenkins URL : $JENKINS_URL"
+          echo "=================================="
 
-          # Give Jenkins time to start
+          echo "Waiting 20 seconds for Jenkins..."
           sleep 20
 
-          LAST_BUILD=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+          LAST_BUILD=$(curl -s \
+            -u "$JENKINS_USER:$JENKINS_TOKEN" \
             "$JENKINS_URL/$JOB_PATH/lastBuild/api/json")
+
+          echo "========== Jenkins Response =========="
+          echo "$LAST_BUILD"
+          echo "======================================"
 
           BUILD_NUMBER=$(echo "$LAST_BUILD" | jq -r '.number')
 
-          if [ "$BUILD_NUMBER" = "null" ] || [ -z "$BUILD_NUMBER" ]; then
-            echo "No Jenkins build found."
+          if [ -z "$BUILD_NUMBER" ] || [ "$BUILD_NUMBER" = "null" ]; then
+            echo "Unable to find Jenkins build."
             exit 1
           fi
 
-          echo "Tracking Jenkins Build #$BUILD_NUMBER"
+          echo "Tracking Build #$BUILD_NUMBER"
 
           while true
           do
-              STATUS=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              STATUS=$(curl -s \
+                -u "$JENKINS_USER:$JENKINS_TOKEN" \
                 "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/api/json")
 
               BUILDING=$(echo "$STATUS" | jq -r '.building')
@@ -73,20 +82,22 @@ jobs:
 
           RESULT=$(echo "$STATUS" | jq -r '.result')
 
-          echo "Build Result: $RESULT"
+          echo "=================================="
+          echo "Build Result : $RESULT"
+          echo "=================================="
 
           if [ "$RESULT" != "SUCCESS" ]; then
 
-              echo ""
-              echo "======================================"
-              echo "JENKINS BUILD FAILED"
-              echo "======================================"
+            echo ""
+            echo "======================================"
+            echo "JENKINS BUILD FAILED"
+            echo "======================================"
 
-              curl -s \
-                -u "$JENKINS_USER:$JENKINS_TOKEN" \
-                "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -60
+            curl -s \
+              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -60
 
-              exit 1
+            exit 1
           fi
 
           echo "Jenkins Build Successful."
