@@ -1,64 +1,102 @@
-name: Jenkins Trigger
+name: jenkins-status
 
 on:
+  push:
+    branches:
+      - Dev
+      - QA
+      - main
+
   pull_request:
     branches:
       - Dev
       - QA
       - main
-  push:
-    branches:
-      - Dev
-      - QA
-      - main  
 
 jobs:
   jenkins-status:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger and wait for Jenkins build
+      - name: Determine Branch
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BRANCH_NAME="$GITHUB_HEAD_REF"
+          else
+            BRANCH_NAME="$GITHUB_REF_NAME"
+          fi
+
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "Branch: $BRANCH_NAME"
+
+      - name: Wait for Jenkins Build
         env:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
           JENKINS_USER: ${{ secrets.JENKINS_USER }}
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
-          BRANCH_NAME="${GITHUB_REF##*/}"
+
           JOB_PATH="job/jenkins-deploy/job/${BRANCH_NAME}"
 
-          echo "Waiting for Jenkins to pick up build for branch: $BRANCH_NAME"
+          echo "================================="
+          echo "Branch : $BRANCH_NAME"
+          echo "Job    : $JOB_PATH"
+          echo "================================="
+
           sleep 20
 
-          LAST_BUILD=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
+          LAST_BUILD=$(curl -s \
+            -u "$JENKINS_USER:$JENKINS_TOKEN" \
             "$JENKINS_URL/$JOB_PATH/lastBuild/api/json")
 
-          BUILD_NUMBER=$(echo "$LAST_BUILD" | grep -o '"number":[0-9]*' | head -1 | grep -o '[0-9]*')
-          echo "Tracking Jenkins build #$BUILD_NUMBER"
+          echo "Jenkins Response:"
+          echo "$LAST_BUILD"
 
-          while true; do
-            STATUS=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
-              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/api/json")
-            BUILDING=$(echo "$STATUS" | grep -o '"building":[a-z]*' | grep -o '[a-z]*$')
-            if [ "$BUILDING" = "false" ]; then
-              break
-            fi
-            echo "Still building..."
-            sleep 10
-          done
-
-          RESULT=$(echo "$STATUS" | grep -o '"result":"[A-Z]*"' | grep -o '"[A-Z]*"$' | tr -d '"')
-          echo "Jenkins build result: $RESULT"
-
-          if [ "$RESULT" != "SUCCESS" ]; then
-            echo ""
-            echo "======================================"
-            echo "  JENKINS BUILD FAILED - LAST 60 LINES OF CONSOLE LOG"
-            echo "======================================"
-            curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
-              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -n 60
-            echo "======================================"
-            echo ""
-            echo "Jenkins build failed or unstable."
+          if ! echo "$LAST_BUILD" | jq empty; then
+            echo "Invalid JSON returned from Jenkins."
             exit 1
           fi
 
-          echo "Jenkins build succeeded."
+          BUILD_NUMBER=$(echo "$LAST_BUILD" | jq -r '.number')
+
+          if [ -z "$BUILD_NUMBER" ] || [ "$BUILD_NUMBER" = "null" ]; then
+            echo "No Jenkins build found."
+            exit 1
+          fi
+
+          echo "Tracking Build #$BUILD_NUMBER"
+
+          while true
+          do
+            STATUS=$(curl -s \
+              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/api/json")
+
+            BUILDING=$(echo "$STATUS" | jq -r '.building')
+
+            if [ "$BUILDING" = "false" ]; then
+              break
+            fi
+
+            echo "Still Building..."
+            sleep 10
+          done
+
+          RESULT=$(echo "$STATUS" | jq -r '.result')
+
+          echo "Result = $RESULT"
+
+          if [ "$RESULT" != "SUCCESS" ]; then
+
+            echo "================================="
+            echo "Jenkins Build Failed"
+            echo "================================="
+
+            curl -s \
+              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+              "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -100
+
+            exit 1
+          fi
+
+          echo "Jenkins Build Successful."
