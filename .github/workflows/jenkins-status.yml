@@ -1,8 +1,11 @@
 name: Jenkins Trigger
 
 on:
-  push:
-    branches: [ Dev, QA, main ]
+  pull_request:
+    branches:
+      - Dev
+      - QA
+      - main
   push:
     branches:
       - Dev
