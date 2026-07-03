@@ -18,9 +18,15 @@ jobs:
 
           echo "PR: $HEAD -> $BASE"
 
-          if [ "$BASE" = "Dev" ] && [ "$HEAD" != "localdev" ]; then
-            echo "❌ Only 'localdev' can merge into 'Dev'. Got '$HEAD'."
-            exit 1
+          if [ "$BASE" = "Dev" ]; then
+            case "$HEAD" in
+              localdev|features/*)
+                ;;
+              *)
+                echo "❌ Only 'localdev' or 'features/*' can merge into 'Dev'. Got '$HEAD'."
+                exit 1
+                ;;
+            esac
           fi
 
           if [ "$BASE" = "QA" ] && [ "$HEAD" != "Dev" ]; then
