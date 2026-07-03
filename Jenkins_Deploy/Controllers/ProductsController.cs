@@ -25,6 +25,7 @@ namespace Jenkins_Deploy.Controllers
             new Product { Id = 5, Name = "Hard Disc", Price = 115.00m },
             new Product { Id = 6, Name = "Cabinet", Price = 15.00m },
             new Product { Id = 7, Name = "Speaker", Price = 32.00m },
+            new Product { Id = 7, Name = "MotherBoard", Price = 132.00m }
         };
 
         public ProductsController(ILogger<ProductsController> logger)
