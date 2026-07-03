@@ -57,12 +57,12 @@ pipeline {
                     }
 
                     if (appPool != '') {
-                        bat "%windir%\\system32\\inetsrv\\appcmd stop apppool /apppool.name:\"${appPool}\""
+                        bat "%windir%\\system32\\inetsrv\\appcmd stop apppool /apppool.name:\"${appPool}\" || exit /b 0"
                         bat 'timeout /t 5'
                         try {
                             bat "xcopy /E /Y /I publish_output ${targetPath}"
                         } finally {
-                            bat "%windir%\\system32\\inetsrv\\appcmd start apppool /apppool.name:\"${appPool}\""
+                            bat "%windir%\\system32\\inetsrv\\appcmd start apppool /apppool.name:\"${appPool}\" || exit /b 0"
                         }
                     }
                 }
