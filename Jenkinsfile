@@ -41,12 +41,29 @@ pipeline {
             steps {
                 script {
                     bat 'dotnet publish -c Release -o publish_output'
+
+                    def appPool = ''
+                    def targetPath = ''
+
                     if (env.BRANCH_NAME == 'Dev') {
-                        bat 'xcopy /E /Y /I publish_output F:\\Project\\Jenkins_deployment\\Dev'
+                        appPool = 'jenkinsdeploydev'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\Dev'
                     } else if (env.BRANCH_NAME == 'QA') {
-                        bat 'xcopy /E /Y /I publish_output F:\\Project\\Jenkins_deployment\\QA'
+                        appPool = 'jenkinsdeployqa'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\QA'
                     } else if (env.BRANCH_NAME == 'main') {
-                        bat 'xcopy /E /Y /I publish_output F:\\Project\\Jenkins_deployment\\Main'
+                        appPool = 'jenkinsdeploymain'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\Main'
+                    }
+
+                    if (appPool != '') {
+                        bat "%windir%\\system32\\inetsrv\\appcmd stop apppool /apppool.name:\"${appPool}\""
+                        bat 'timeout /t 5'
+                        try {
+                            bat "xcopy /E /Y /I publish_output ${targetPath}"
+                        } finally {
+                            bat "%windir%\\system32\\inetsrv\\appcmd start apppool /apppool.name:\"${appPool}\""
+                        }
                     }
                 }
             }
