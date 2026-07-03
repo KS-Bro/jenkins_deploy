@@ -23,35 +23,56 @@ jobs:
           fi
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           echo "Branch: $BRANCH_NAME"
-      - name: Wait for Jenkins Build
+
+      - name: Trigger Jenkins Build
         env:
           JENKINS_URL: ${{ secrets.JENKINS_URL }}
           JENKINS_USER: ${{ secrets.JENKINS_USER }}
           JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
         run: |
           JOB_PATH="job/jenkins-deploy/job/${BRANCH_NAME}"
-          echo "================================="
-          echo "Branch : $BRANCH_NAME"
-          echo "Job    : $JOB_PATH"
-          echo "================================="
-          sleep 20
-          LAST_BUILD=$(curl -s \
-            -u "$JENKINS_USER:$JENKINS_TOKEN" \
-            "$JENKINS_URL/$JOB_PATH/lastBuild/api/json")
-          echo "Jenkins Response:"
-          echo "$LAST_BUILD"
-          if ! echo "$LAST_BUILD" | jq empty; then
-            echo "Invalid JSON returned from Jenkins."
+
+          echo "Triggering new build for $BRANCH_NAME..."
+
+          QUEUE_URL=$(curl -s -i -u "$JENKINS_USER:$JENKINS_TOKEN" \
+            -X POST "$JENKINS_URL/$JOB_PATH/build" | grep -i "^Location:" | awk '{print $2}' | tr -d '\r')
+
+          echo "Queue URL: $QUEUE_URL"
+          echo "QUEUE_URL=$QUEUE_URL" >> $GITHUB_ENV
+
+      - name: Wait for Build Number from Queue
+        env:
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+        run: |
+          BUILD_NUMBER=""
+          for i in $(seq 1 30); do
+            QUEUE_INFO=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" "${QUEUE_URL}api/json")
+            BUILD_NUMBER=$(echo "$QUEUE_INFO" | jq -r '.executable.number // empty')
+
+            if [ -n "$BUILD_NUMBER" ]; then
+              echo "Build started: #$BUILD_NUMBER"
+              break
+            fi
+
+            echo "Waiting for build to start... ($i0s)"
+            sleep 10
+          done
+
+          if [ -z "$BUILD_NUMBER" ]; then
+            echo "Build did not start in time."
             exit 1
           fi
-          BUILD_NUMBER=$(echo "$LAST_BUILD" | jq -r '.number')
-          if [ -z "$BUILD_NUMBER" ] || [ "$BUILD_NUMBER" = "null" ]; then
-            echo "No Jenkins build found."
-            exit 1
-          fi
-          echo "Tracking Build #$BUILD_NUMBER"
+
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
 
+      - name: Wait for Jenkins Build to Finish
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+        run: |
+          JOB_PATH="job/jenkins-deploy/job/${BRANCH_NAME}"
           BUILD_URL="$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/"
 
           echo "### 🔧 Jenkins Build Info" >> $GITHUB_STEP_SUMMARY
@@ -61,26 +82,28 @@ jobs:
 
           while true
           do
-            STATUS=$(curl -s \
-              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+            STATUS=$(curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
               "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/api/json")
+
             BUILDING=$(echo "$STATUS" | jq -r '.building')
+
             if [ "$BUILDING" = "false" ]; then
               break
             fi
+
             echo "Still Building Jenkins #$BUILD_NUMBER ..."
             sleep 10
           done
+
           RESULT=$(echo "$STATUS" | jq -r '.result')
           echo "Result = $RESULT"
           echo "- **Result:** $RESULT" >> $GITHUB_STEP_SUMMARY
+
           if [ "$RESULT" != "SUCCESS" ]; then
-            echo "================================="
             echo "Jenkins Build #$BUILD_NUMBER Failed"
-            echo "================================="
-            curl -s \
-              -u "$JENKINS_USER:$JENKINS_TOKEN" \
+            curl -s -u "$JENKINS_USER:$JENKINS_TOKEN" \
               "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -100
             exit 1
           fi
+
           echo "Jenkins Build #$BUILD_NUMBER Successful."
