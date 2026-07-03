@@ -52,13 +52,13 @@ pipeline {
                         appPool = 'jenkinsdeployqa'
                         targetPath = 'F:\\Project\\Jenkins_deployment\\QA'
                     } else if (env.BRANCH_NAME == 'main') {
-                        appPool = 'jenkinsdeploymain'
+                        appPool = 'MainAppPool'
                         targetPath = 'F:\\Project\\Jenkins_deployment\\Main'
                     }
 
                     if (appPool != '') {
                         bat "%windir%\\system32\\inetsrv\\appcmd stop apppool /apppool.name:\"${appPool}\" || exit /b 0"
-                        bat 'timeout /t 5'
+                        bat 'ping -n 6 127.0.0.1 > nul'
                         try {
                             bat "xcopy /E /Y /I publish_output ${targetPath}"
                         } finally {
