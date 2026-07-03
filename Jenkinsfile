@@ -1,38 +1,71 @@
 pipeline {
     agent any
-
     stages {
-
         stage('Restore') {
             steps {
                 bat 'dotnet restore'
             }
         }
-
         stage('Build') {
             steps {
-                bat 'dotnet build --configuration Release'
+                bat 'dotnet build'
             }
         }
-
         stage('Test') {
-            when {
-                anyOf {
-                    branch 'QA'
-                    branch 'main'
+            steps {
+                bat 'dotnet test --logger "trx;LogFileName=test_results.trx" --results-directory TestResults'
+            }
+            post {
+                always {
+                    mstest testResultsFile: 'TestResults/*.trx'
                 }
             }
+        }
+        stage('SonarQube Analysis') {
             steps {
-                bat 'dotnet test'
+                withSonarQubeEnv('SonarQube') {
+                    bat 'dotnet sonarscanner begin /k:"jenkins_deploy" /d:sonar.host.url=%SONAR_HOST_URL% /d:sonar.login=%SONAR_AUTH_TOKEN%'
+                    bat 'dotnet build'
+                    bat 'dotnet sonarscanner end /d:sonar.login=%SONAR_AUTH_TOKEN%'
+                }
             }
         }
-
-        stage('Publish') {
-            when {
-                branch 'main'
-            }
+        stage('Quality Gate') {
             steps {
-                bat 'dotnet publish -c Release -o publish'
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    bat 'dotnet publish -c Release -o publish_output'
+
+                    def appPool = ''
+                    def targetPath = ''
+
+                    if (env.BRANCH_NAME == 'Dev') {
+                        appPool = 'jenkinsdeploydev'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\Dev'
+                    } else if (env.BRANCH_NAME == 'QA') {
+                        appPool = 'jenkinsdeployqa'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\QA'
+                    } else if (env.BRANCH_NAME == 'main') {
+                        appPool = 'MainAppPool'
+                        targetPath = 'F:\\Project\\Jenkins_deployment\\Main'
+                    }
+
+                    if (appPool != '') {
+                        bat "%windir%\\system32\\inetsrv\\appcmd stop apppool /apppool.name:\"${appPool}\" || exit /b 0"
+                        bat 'ping -n 6 127.0.0.1 > nul'
+                        try {
+                            bat "xcopy /E /Y /I publish_output ${targetPath}"
+                        } finally {
+                            bat "%windir%\\system32\\inetsrv\\appcmd start apppool /apppool.name:\"${appPool}\" || exit /b 0"
+                        }
+                    }
+                }
             }
         }
     }
