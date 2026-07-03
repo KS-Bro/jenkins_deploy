@@ -50,6 +50,15 @@ jobs:
             exit 1
           fi
           echo "Tracking Build #$BUILD_NUMBER"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+          BUILD_URL="$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/"
+
+          echo "### 🔧 Jenkins Build Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** $BRANCH_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Jenkins Build ID:** #$BUILD_NUMBER" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build URL:** $BUILD_URL" >> $GITHUB_STEP_SUMMARY
+
           while true
           do
             STATUS=$(curl -s \
@@ -59,18 +68,19 @@ jobs:
             if [ "$BUILDING" = "false" ]; then
               break
             fi
-            echo "Still Building..."
+            echo "Still Building Jenkins #$BUILD_NUMBER ..."
             sleep 10
           done
           RESULT=$(echo "$STATUS" | jq -r '.result')
           echo "Result = $RESULT"
+          echo "- **Result:** $RESULT" >> $GITHUB_STEP_SUMMARY
           if [ "$RESULT" != "SUCCESS" ]; then
             echo "================================="
-            echo "Jenkins Build Failed"
+            echo "Jenkins Build #$BUILD_NUMBER Failed"
             echo "================================="
             curl -s \
               -u "$JENKINS_USER:$JENKINS_TOKEN" \
               "$JENKINS_URL/$JOB_PATH/$BUILD_NUMBER/consoleText" | tail -100
             exit 1
           fi
-          echo "Jenkins Build Successful."
+          echo "Jenkins Build #$BUILD_NUMBER Successful."
