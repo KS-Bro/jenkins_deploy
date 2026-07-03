@@ -52,7 +52,7 @@ pipeline {
                         appPool = 'jenkinsdeployqa'
                         targetPath = 'F:\\Project\\Jenkins_deployment\\QA'
                     } else if (env.BRANCH_NAME == 'main') {
-                        appPool = 'MainAppPool'
+                        appPool = 'jenkinsdeploymain'
                         targetPath = 'F:\\Project\\Jenkins_deployment\\Main'
                     }
 
