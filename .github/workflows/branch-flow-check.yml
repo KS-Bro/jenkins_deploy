@@ -1,0 +1,36 @@
+name: branch-flow-check
+
+on:
+  pull_request:
+    branches:
+      - Dev
+      - QA
+      - main
+
+jobs:
+  validate-branch-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check allowed source branch
+        run: |
+          BASE="${{ github.event.pull_request.base.ref }}"
+          HEAD="${{ github.event.pull_request.head.ref }}"
+
+          echo "PR: $HEAD -> $BASE"
+
+          if [ "$BASE" = "Dev" ] && [ "$HEAD" != "localdev" ]; then
+            echo "❌ Only 'localdev' can merge into 'Dev'. Got '$HEAD'."
+            exit 1
+          fi
+
+          if [ "$BASE" = "QA" ] && [ "$HEAD" != "Dev" ]; then
+            echo "❌ Only 'Dev' can merge into 'QA'. Got '$HEAD'."
+            exit 1
+          fi
+
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "QA" ]; then
+            echo "❌ Only 'QA' can merge into 'main'. Got '$HEAD'."
+            exit 1
+          fi
+
+          echo "✅ Branch flow is valid: $HEAD -> $BASE"
